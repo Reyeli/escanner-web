@@ -3,20 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Escáner Digital Web Pro</title>
+    <title>Escáner Profesional - InnovaSoft</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
+    
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f0f2f5;
             margin: 0;
-            padding: 20px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
         .container {
             background: white;
-            padding: 25px;
+            padding: 20px;
             border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             max-width: 500px;
@@ -24,70 +27,49 @@
             text-align: center;
             box-sizing: border-box;
         }
-        h2 { margin-bottom: 5px; color: #333; }
+        h2 { margin: 0 0 5px 0; color: #333; }
         p { color: #666; font-size: 14px; margin-bottom: 20px; }
         
-        .camera-wrapper {
-            position: relative;
-            width: 100%;
-            max-width: 400px;
-            margin: 0 auto 20px auto;
+        /* Área de edición donde aparece la foto para recortar */
+        .editor-wrapper {
+            max-width: 100%;
+            max-height: 400px;
+            margin-bottom: 20px;
+            display: none;
+            background: #222;
             border-radius: 8px;
             overflow: hidden;
-            background: #000;
-            display: none;
         }
-        video {
-            width: 100%;
+        .editor-wrapper img {
+            max-width: 100%;
             display: block;
         }
         
-        /* Cuadro guía para centrar el documento */
-        .camera-overlay {
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            border: 3px dashed #007bff;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
-            margin: 30px 25px;
-            border-radius: 4px;
-            pointer-events: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .camera-overlay::after {
-            content: "ENFOQUE EL TEXTO AQUÍ";
-            color: #007bff;
-            font-size: 11px;
-            font-weight: bold;
-            background: rgba(255, 255, 255, 0.95);
-            padding: 5px 10px;
-            border-radius: 4px;
-            letter-spacing: 1px;
-        }
-
         .btn {
             background: #007bff;
             color: white;
             border: none;
-            padding: 14px 24px;
+            padding: 14px 20px;
             font-size: 16px;
             font-weight: bold;
             border-radius: 8px;
             cursor: pointer;
             width: 100%;
             margin-bottom: 10px;
-            transition: background 0.2s;
+            display: inline-block;
+            box-sizing: border-box;
         }
-        .btn:hover { background: #0056b3; }
         .btn-success { background: #28a745; display: none; }
-        .btn-success:hover { background: #218838; }
+        .btn-warning { background: #ff9800; display: none; }
+        
+        /* Ocultar el input de archivo feo por defecto */
+        #inputFoto { display: none; }
         
         .preview-zone {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 10px;
-            margin-top: 15px;
+            margin-top: 25px;
         }
         .thumb-container {
             border: 2px solid #28a745;
@@ -111,121 +93,116 @@
 <body>
 
 <div class="container">
-    <h2>Escáner Digital Nítido</h2>
-    <p>Ubique el papel dentro del recuadro. El sistema optimizará el contraste para que sea legible.</p>
+    <h2>Escáner Profesional Web</h2>
+    <p>Toma la foto normal con tu cámara, recorta los bordes con precisión y optimiza la nitidez.</p>
 
-    <div class="camera-wrapper" id="cameraWrapper">
-        <video id="video" autoplay playsinline></video>
-        <div class="camera-overlay"></div>
+    <label for="inputFoto" class="btn" id="lblSeleccionar">📸 Tomar / Seleccionar Foto</label>
+    <input type="file" id="inputFoto" accept="image/*">
+
+    <div class="editor-wrapper" id="editorWrapper">
+        <img id="imageToCrop" src="">
     </div>
 
-    <button class="btn" id="btnAccion" onclick="iniciarO_Capturar()">📸 Abrir Cámara</button>
+    <button class="btn btn-warning" id="btnRecortar" onclick="procesarRecorteYNitidez()">✂️ Confirmar Recorte de Hoja</button>
     
     <form action="procesar.php" method="POST" id="formScanner">
         <input type="hidden" name="images_package" id="images_package">
-        <button type="submit" class="btn btn-success" id="btnGuardar">📦 Guardar PDF Optimizado</button>
+        <button type="submit" class="btn btn-success" id="btnGuardar">📦 Generar PDF Legible</button>
     </form>
 
     <div class="preview-zone" id="previewZone"></div>
 </div>
 
-<script>
-    let streamLocal = null;
-    let clickCount = 0;
-    let listaHojasBase64 = [];
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 
-    const video = document.getElementById('video');
-    const cameraWrapper = document.getElementById('cameraWrapper');
-    const btnAccion = document.getElementById('btnAccion');
+<script>
+    let cropper = null;
+    let listaHojasBase64 = [];
+    
+    const inputFoto = document.getElementById('inputFoto');
+    const imageToCrop = document.getElementById('imageToCrop');
+    const editorWrapper = document.getElementById('editorWrapper');
+    const btnRecortar = document.getElementById('btnRecortar');
     const btnGuardar = document.getElementById('btnGuardar');
+    const lblSeleccionar = document.getElementById('lblSeleccionar');
     const previewZone = document.getElementById('previewZone');
 
-    async function iniciarO_Capturar() {
-        if (clickCount === 0) {
-            // MODIFICADO: Forzamos al sensor a trabajar en alta resolución (Full HD mínimo)
-            const opcionesVideo = {
-                facingMode: { exact: "environment" },
-                width: { ideal: 1920, min: 1280 },
-                height: { ideal: 1080, min: 720 }
-            };
-
-            try {
-                streamLocal = await navigator.mediaDevices.getUserMedia({ video: opcionesVideo, audio: false });
-            } catch (err) {
-                // Alternativa por si se prueba en PC o cámaras antiguas
-                streamLocal = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: 1280, height: 720 }, 
-                    audio: false 
+    // Detectar cuando el usuario toma una foto o selecciona un archivo
+    inputFoto.addEventListener('change', function(e) {
+        const files = e.target.files;
+        if (files && files.length > 0) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                // Destruir cropper anterior si existía
+                if (cropper) {
+                    cropper.destroy();
+                }
+                
+                imageToCrop.src = event.target.result;
+                editorWrapper.style.display = "block";
+                btnRecortar.style.display = "block";
+                lblSeleccionar.innerText = "🔄 Cambiar Foto";
+                
+                // Inicializar Cropper con libertad de movimiento en las esquinas
+                cropper = new Cropper(imageToCrop, {
+                    viewMode: 1,
+                    dragMode: 'move',
+                    autoCropArea: 0.8,
+                    restore: false,
+                    guides: true,
+                    center: true,
+                    highlight: false,
+                    cropBoxMovable: true,
+                    cropBoxResizable: true,
+                    toggleDragModeOnDblclick: false,
                 });
-            }
-            video.srcObject = streamLocal;
-            cameraWrapper.style.display = "block";
-            btnAccion.innerText = "📸 Capturar Documento";
-            clickCount = 1;
-        } else {
-            procesarCapturaNítida();
+            };
+            reader.readAsDataURL(files[0]);
         }
-    }
+    });
 
-    function procesarCapturaNítida() {
-        const canvas = document.createElement('canvas');
+    function procesarRecorteYNitidez() {
+        if (!cropper) return;
+
+        // Obtener el lienzo recortado a la resolución nativa original de la foto
+        const canvas = cropper.getCroppedCanvas({
+            imageSmoothingEnabled: true,
+            imageSmoothingQuality: 'high',
+        });
+
         const ctx = canvas.getContext('2d');
 
-        // Dimensiones reales del sensor de la cámara
-        const videoWidth = video.videoWidth;
-        const videoHeight = video.videoHeight;
-
-        // Proporciones en la pantalla del navegador
-        const wrapperRect = cameraWrapper.getBoundingClientRect();
-        const overlay = document.querySelector('.camera-overlay');
-        const overlayRect = overlay.getBoundingClientRect();
-
-        // Mapeo exacto de coordenadas para no perder píxeles reales
-        const scaleX = videoWidth / wrapperRect.width;
-        const scaleY = videoHeight / wrapperRect.height;
-
-        const cropX = (overlayRect.left - wrapperRect.left) * scaleX;
-        const cropY = (overlayRect.top - wrapperRect.top) * scaleY;
-        const cropWidth = overlayRect.width * scaleX;
-        const cropHeight = overlayRect.height * scaleY;
-
-        // Ajustamos el canvas a la resolución real del recorte de alta definición
-        canvas.width = cropWidth;
-        canvas.height = cropHeight;
-
-        // Dibujar el fragmento original en alta definición
-        ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
-
-        // --- FILTRO DE NITIDEZ Y ALTO CONTRASTE (Efecto Escáner) ---
+        // --- FILTRO DE ALTO CONTRASTE INTEGRADO ---
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imgData.data;
 
         for (let i = 0; i < data.length; i += 4) {
-            // Convertir a escala de grises usando la luminosidad percibida
+            // Conversión a escala de grises de alta fidelidad
             let gris = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
             
-            // FILTRO UMBRAL (Threshold): Si el píxel es claro, lo vuelve blanco puro. Si es oscuro (letras), negro puro.
-            let umbral = 125; // Puedes ajustar este número entre 100 y 140 para calibrar la sensibilidad
-            let finalColor = (gris > umbral) ? 255 : 0;
+            // Umbral calibrado (Todo fondo opaco/sombra pasa a blanco puro, texto a negro)
+            let umbral = 130; 
+            let colorFinal = (gris > umbral) ? 255 : 0;
 
-            data[i]     = finalColor; // R
-            data[i + 1] = finalColor; // G
-            data[i + 2] = finalColor; // B
+            data[i]     = colorFinal;
+            data[i + 1] = colorFinal;
+            data[i + 2] = colorFinal;
         }
         ctx.putImageData(imgData, 0, 0);
-        // -----------------------------------------------------------
+        // ------------------------------------------
 
-        // Exportamos en JPEG con calidad al 95%
-        const fotoProcesada = canvas.toDataURL('image/jpeg', 0.95);
-        listaHojasBase64.push(fotoProcesada);
+        // Convertir el canvas final optimizado a Base64 con alta densidad
+        const fotoFinalBase64 = canvas.toDataURL('image/jpeg', 0.95);
+        listaHojasBase64.push(fotoFinalBase64);
 
+        // Actualizar el paquete para procesar.php
         document.getElementById('images_package').value = JSON.stringify(listaHojasBase64);
 
-        // Crear la vista previa en la grilla de abajo
+        // Crear vista previa en la grilla inferior
         const thumbContainer = document.createElement('div');
         thumbContainer.className = 'thumb-container';
         const imgElement = document.createElement('img');
-        imgElement.src = fotoProcesada;
+        imgElement.src = fotoFinalBase64;
         const labelElement = document.createElement('div');
         labelElement.className = 'thumb-label';
         labelElement.innerText = "Pág. " + listaHojasBase64.length + " ✔";
@@ -234,9 +211,16 @@
         thumbContainer.appendChild(labelElement);
         previewZone.appendChild(thumbContainer);
 
-        if (listaHojasBase64.length > 0) {
-            btnGuardar.style.display = "block";
-        }
+        // Limpiar el editor y preparar para la siguiente hoja
+        cropper.destroy();
+        cropper = null;
+        editorWrapper.style.display = "none";
+        btnRecortar.style.display = "none";
+        lblSeleccionar.innerText = "📸 Agregar Siguiente Hoja";
+        btnGuardar.style.display = "block";
+        
+        // Resetear el input para que permita subir la misma foto si se desea
+        inputFoto.value = "";
     }
 </script>
 
