@@ -3,95 +3,224 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Escáner de Documentos - InnovaSoft</title>
+    <title>Escáner Digital Web</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f2f5; margin: 0; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); max-width: 500px; width: 100%; text-align: center; }
-        h2 { color: #333; margin-bottom: 10px; }
-        p { color: #666; font-size: 14px; margin-bottom: 25px; }
-        .btn { background-color: #007bff; color: white; padding: 14px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; display: inline-block; transition: background 0.3s; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
-        .btn:hover { background-color: #0056b3; }
-        .btn-success { background-color: #28a745; }
-        .btn-success:hover { background-color: #218838; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+            box-sizing: border-box;
+        }
+        h2 { margin-bottom: 5px; color: #333; }
+        p { color: #666; font-size: 14px; margin-bottom: 20px; }
         
-        /* Contenedor de miniaturas */
-        #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; margin-top: 20px; max-height: 250px; overflow-y: auto; padding: 10px; border: 1px dashed #ccc; border-radius: 8px; background: #fafafa; display: none; }
-        .thumb-wrapper { position: relative; border: 2px solid #ddd; border-radius: 6px; padding: 3px; background: white; }
-        .thumb-wrapper img { width: 100%; height: 120px; object-fit: cover; border-radius: 4px; }
-        .page-badge { position: absolute; top: 5px; left: 5px; background: rgba(0,0,0,0.7); color: white; padding: 2px 6px; font-size: 11px; border-radius: 4px; font-weight: bold; }
+        /* Contenedor de la cámara con visor */
+        .camera-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto 20px auto;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #000;
+            display: none;
+        }
+        video {
+            width: 100%;
+            display: block;
+        }
+        
+        /* CUADRO INDICADOR: La guía visual de la hoja */
+        .camera-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border: 4px dashed #007bff;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* Oscurece el exterior */
+            margin: 40px 30px; /* Margen para centrar el cuadro de la hoja */
+            border-radius: 4px;
+            pointer-events: none; /* No interrumpe los clics */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .camera-overlay::after {
+            content: "ALINEA LA HOJA AQUÍ";
+            color: #007bff;
+            font-size: 11px;
+            font-weight: bold;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 4px 8px;
+            border-radius: 4px;
+            letter-spacing: 1px;
+        }
+
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 10px;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #0056b3; }
+        .btn-success { background: #28a745; display: none; }
+        .btn-success:hover { background: #218838; }
+        
+        .preview-zone {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .thumb-container {
+            position: relative;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            padding: 2px;
+            background: #fff;
+        }
+        .thumb-container img {
+            width: 100%;
+            border-radius: 4px;
+            display: block;
+        }
+        .thumb-label {
+            font-size: 11px;
+            color: #555;
+            margin-top: 2px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
-<div class="card">
+<div class="container">
     <h2>Escáner Digital Web</h2>
-    <p>Captura las páginas de tu documento una por una. Al finalizar, guárdalas en un solo PDF.</p>
-    
-    <label for="camera-input" class="btn" id="btn-capturar">📸 Escanear Hoja</label>
-    <input type="file" id="camera-input" accept="image/*" capture="environment" style="display: none;">
+    <p>Alinea tu documento dentro del recuadro azul para recortar el fondo automáticamente.</p>
 
-    <div id="gallery"></div>
+    <!-- Envoltura de cámara con la máscara de enfoque -->
+    <div class="camera-wrapper" id="cameraWrapper">
+        <video id="video" autoplay playsinline></video>
+        <div class="camera-overlay"></div>
+    </div>
+
+    <button class="btn" id="btnAccion" onclick="iniciarO_Capturar()">📸 Iniciar Escáner</button>
     
-    <form id="upload-form" action="procesar.php" method="POST">
+    <form action="procesar.php" method="POST" id="formScanner">
         <input type="hidden" name="images_package" id="images_package">
-        <button type="submit" id="btn-finalizar" class="btn btn-success" style="display: none; margin-top: 20px;">📄 Convertir y Guardar Documento (0 Hojas)</button>
+        <button type="submit" class="btn btn-success" id="btnGuardar">📦 Convertir y Guardar PDF</button>
     </form>
+
+    <div class="preview-zone" id="previewZone"></div>
 </div>
 
 <script>
-    const cameraInput = document.getElementById('camera-input');
-    const gallery = document.getElementById('gallery');
-    const imagesPackageInput = document.getElementById('images_package');
-    const btnFinalizar = document.getElementById('btn-finalizar');
-    const btnCapturar = document.getElementById('btn-capturar');
+    let streamLocal = null;
+    let clickCount = 0;
+    let listaHojasBase64 = [];
 
-    // Array global de JavaScript para retener la lista de hojas en memoria
-    let coleccionHojas = [];
+    const video = document.getElementById('video');
+    const cameraWrapper = document.getElementById('cameraWrapper');
+    const btnAccion = document.getElementById('btnAccion');
+    const btnGuardar = document.getElementById('btnGuardar');
+    const previewZone = document.getElementById('previewZone');
 
-    cameraInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            
-            reader.onload = function(event) {
-                const base64Data = event.target.result;
-                
-                // 1. Agregar la imagen al array en memoria
-                coleccionHojas.push(base64Data);
-                
-                // 2. Actualizar la interfaz visual (Galería de miniaturas)
-                renderizarGaleria();
-                
-                // 3. Empaquetar el array completo en formato JSON para mandarlo a PHP
-                imagesPackageInput.value = JSON.stringify(coleccionHojas);
-                
-                // 4. Cambiar el texto del botón de captura y mostrar el de guardar
-                btnCapturar.innerHTML = "📸 Agregar Otra Hoja";
-                btnFinalizar.style.display = 'block';
-                btnFinalizar.innerHTML = `📄 Convertir y Guardar Documento (${coleccionHojas.length} Hojas)`;
-                
-                // Limpiar el input para permitir tomar otra foto seguida con el mismo disparador
-                cameraInput.value = "";
+    async function iniciarO_Capturar() {
+        if (clickCount === 0) {
+            // PASO 1: Encender la cámara trasera del celular
+            try {
+                streamLocal = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: { exact: "environment" } },
+                    audio: false
+                });
+            } catch (err) {
+                // Si falla la trasera (ej. en PC), abre la cámara por defecto
+                streamLocal = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
             }
-            
-            reader.readAsDataURL(file);
+            video.srcObject = streamLocal;
+            cameraWrapper.style.display = "block";
+            btnAccion.innerText = "📸 Capturar Hoja";
+            clickCount = 1;
+        } else {
+            // PASO 2: Capturar y recortar solo el área del recuadro azul
+            procesarCapturaRecortada();
         }
-    });
+    }
 
-    function renderizarGaleria() {
-        gallery.innerHTML = "";
-        gallery.style.display = "grid";
+    function procesarCapturaRecortada() {
+        // Crear un canvas oculto para procesar el recorte físico
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Obtener las dimensiones reales del stream de video de la cámara
+        const videoWidth = video.videoWidth;
+        const videoHeight = video.videoHeight;
+
+        // Obtener las proporciones visuales de la interfaz en la pantalla
+        const wrapperRect = cameraWrapper.getBoundingClientRect();
+        const overlay = document.querySelector('.camera-overlay');
+        const overlayRect = overlay.getBoundingClientRect();
+
+        // Calcular los porcentajes y coordenadas de dónde está el cuadro azul respecto al video completo
+        const scaleX = videoWidth / wrapperRect.width;
+        const scaleY = videoHeight / wrapperRect.height;
+
+        const cropX = (overlayRect.left - wrapperRect.left) * scaleX;
+        const cropY = (overlayRect.top - wrapperRect.top) * scaleY;
+        const cropWidth = overlayRect.width * scaleX;
+        const cropHeight = overlayRect.height * scaleY;
+
+        // Asignar el tamaño final de la imagen ya recortada al canvas
+        canvas.width = cropWidth;
+        canvas.height = cropHeight;
+
+        // Dibujar en el canvas EXCLUSIVAMENTE la sub-zona recortada del video original
+        ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+        // Convertir el recorte a formato base64 de alta calidad
+        const fotoRecortadaBase64 = canvas.toDataURL('image/jpeg', 0.9);
+        listaHojasBase64.push(fotoRecortadaBase64);
+
+        // Actualizar el input invisible del formulario
+        document.getElementById('images_package').value = JSON.stringify(listaHojasBase64);
+
+        // Renderizar la miniatura en la pantalla para control del usuario
+        const thumbContainer = document.createElement('div');
+        thumbContainer.className = 'thumb-container';
         
-        coleccionHojas.forEach((imgSrc, index) => {
-            const wrapper = document.createElement('div');
-            wrapper.className = 'thumb-wrapper';
-            
-            wrapper.innerHTML = `
-                <span class="page-badge">Pág. ${index + 1}</span>
-                <img src="${imgSrc}">
-            `;
-            gallery.appendChild(wrapper);
-        });
+        const imgElement = document.createElement('img');
+        imgElement.src = fotoRecortadaBase64;
+        
+        const labelElement = document.createElement('div');
+        labelElement.className = 'thumb-label';
+        labelElement.innerText = "Pág. " + listaHojasBase64.length;
+
+        thumbContainer.appendChild(imgElement);
+        thumbContainer.appendChild(labelElement);
+        previewZone.appendChild(thumbContainer);
+
+        // Mostrar el botón de guardar PDF si ya hay hojas listas
+        if (listaHojasBase64.length > 0) {
+            btnGuardar.style.display = "block";
+        }
     }
 </script>
 
