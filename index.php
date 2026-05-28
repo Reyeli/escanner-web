@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Escáner Digital Web</title>
+    <title>Escáner Digital Web Pro</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -27,7 +27,6 @@
         h2 { margin-bottom: 5px; color: #333; }
         p { color: #666; font-size: 14px; margin-bottom: 20px; }
         
-        /* Contenedor de la cámara con visor */
         .camera-wrapper {
             position: relative;
             width: 100%;
@@ -43,26 +42,26 @@
             display: block;
         }
         
-        /* CUADRO INDICADOR: La guía visual de la hoja */
+        /* Cuadro guía para centrar el documento */
         .camera-overlay {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            border: 4px dashed #007bff;
-            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5); /* Oscurece el exterior */
-            margin: 40px 30px; /* Margen para centrar el cuadro de la hoja */
+            border: 3px dashed #007bff;
+            box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.6);
+            margin: 30px 25px;
             border-radius: 4px;
-            pointer-events: none; /* No interrumpe los clics */
+            pointer-events: none;
             display: flex;
             align-items: center;
             justify-content: center;
         }
         .camera-overlay::after {
-            content: "ALINEA LA HOJA AQUÍ";
+            content: "ENFOQUE EL TEXTO AQUÍ";
             color: #007bff;
             font-size: 11px;
             font-weight: bold;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 5px 10px;
             border-radius: 4px;
             letter-spacing: 1px;
         }
@@ -71,7 +70,7 @@
             background: #007bff;
             color: white;
             border: none;
-            padding: 12px 24px;
+            padding: 14px 24px;
             font-size: 16px;
             font-weight: bold;
             border-radius: 8px;
@@ -91,8 +90,7 @@
             margin-top: 15px;
         }
         .thumb-container {
-            position: relative;
-            border: 2px solid #ddd;
+            border: 2px solid #28a745;
             border-radius: 6px;
             padding: 2px;
             background: #fff;
@@ -104,7 +102,7 @@
         }
         .thumb-label {
             font-size: 11px;
-            color: #555;
+            color: #333;
             margin-top: 2px;
             font-weight: bold;
         }
@@ -113,20 +111,19 @@
 <body>
 
 <div class="container">
-    <h2>Escáner Digital Web</h2>
-    <p>Alinea tu documento dentro del recuadro azul para recortar el fondo automáticamente.</p>
+    <h2>Escáner Digital Nítido</h2>
+    <p>Ubique el papel dentro del recuadro. El sistema optimizará el contraste para que sea legible.</p>
 
-    <!-- Envoltura de cámara con la máscara de enfoque -->
     <div class="camera-wrapper" id="cameraWrapper">
         <video id="video" autoplay playsinline></video>
         <div class="camera-overlay"></div>
     </div>
 
-    <button class="btn" id="btnAccion" onclick="iniciarO_Capturar()">📸 Iniciar Escáner</button>
+    <button class="btn" id="btnAccion" onclick="iniciarO_Capturar()">📸 Abrir Cámara</button>
     
     <form action="procesar.php" method="POST" id="formScanner">
         <input type="hidden" name="images_package" id="images_package">
-        <button type="submit" class="btn btn-success" id="btnGuardar">📦 Convertir y Guardar PDF</button>
+        <button type="submit" class="btn btn-success" id="btnGuardar">📦 Guardar PDF Optimizado</button>
     </form>
 
     <div class="preview-zone" id="previewZone"></div>
@@ -145,41 +142,45 @@
 
     async function iniciarO_Capturar() {
         if (clickCount === 0) {
-            // PASO 1: Encender la cámara trasera del celular
+            // MODIFICADO: Forzamos al sensor a trabajar en alta resolución (Full HD mínimo)
+            const opcionesVideo = {
+                facingMode: { exact: "environment" },
+                width: { ideal: 1920, min: 1280 },
+                height: { ideal: 1080, min: 720 }
+            };
+
             try {
-                streamLocal = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { exact: "environment" } },
-                    audio: false
-                });
+                streamLocal = await navigator.mediaDevices.getUserMedia({ video: opcionesVideo, audio: false });
             } catch (err) {
-                // Si falla la trasera (ej. en PC), abre la cámara por defecto
-                streamLocal = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                // Alternativa por si se prueba en PC o cámaras antiguas
+                streamLocal = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 1280, height: 720 }, 
+                    audio: false 
+                });
             }
             video.srcObject = streamLocal;
             cameraWrapper.style.display = "block";
-            btnAccion.innerText = "📸 Capturar Hoja";
+            btnAccion.innerText = "📸 Capturar Documento";
             clickCount = 1;
         } else {
-            // PASO 2: Capturar y recortar solo el área del recuadro azul
-            procesarCapturaRecortada();
+            procesarCapturaNítida();
         }
     }
 
-    function procesarCapturaRecortada() {
-        // Crear un canvas oculto para procesar el recorte físico
+    function procesarCapturaNítida() {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
 
-        // Obtener las dimensiones reales del stream de video de la cámara
+        // Dimensiones reales del sensor de la cámara
         const videoWidth = video.videoWidth;
         const videoHeight = video.videoHeight;
 
-        // Obtener las proporciones visuales de la interfaz en la pantalla
+        // Proporciones en la pantalla del navegador
         const wrapperRect = cameraWrapper.getBoundingClientRect();
         const overlay = document.querySelector('.camera-overlay');
         const overlayRect = overlay.getBoundingClientRect();
 
-        // Calcular los porcentajes y coordenadas de dónde está el cuadro azul respecto al video completo
+        // Mapeo exacto de coordenadas para no perder píxeles reales
         const scaleX = videoWidth / wrapperRect.width;
         const scaleY = videoHeight / wrapperRect.height;
 
@@ -188,36 +189,51 @@
         const cropWidth = overlayRect.width * scaleX;
         const cropHeight = overlayRect.height * scaleY;
 
-        // Asignar el tamaño final de la imagen ya recortada al canvas
+        // Ajustamos el canvas a la resolución real del recorte de alta definición
         canvas.width = cropWidth;
         canvas.height = cropHeight;
 
-        // Dibujar en el canvas EXCLUSIVAMENTE la sub-zona recortada del video original
+        // Dibujar el fragmento original en alta definición
         ctx.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
 
-        // Convertir el recorte a formato base64 de alta calidad
-        const fotoRecortadaBase64 = canvas.toDataURL('image/jpeg', 0.9);
-        listaHojasBase64.push(fotoRecortadaBase64);
+        // --- FILTRO DE NITIDEZ Y ALTO CONTRASTE (Efecto Escáner) ---
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
 
-        // Actualizar el input invisible del formulario
+        for (let i = 0; i < data.length; i += 4) {
+            // Convertir a escala de grises usando la luminosidad percibida
+            let gris = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+            
+            // FILTRO UMBRAL (Threshold): Si el píxel es claro, lo vuelve blanco puro. Si es oscuro (letras), negro puro.
+            let umbral = 125; // Puedes ajustar este número entre 100 y 140 para calibrar la sensibilidad
+            let finalColor = (gris > umbral) ? 255 : 0;
+
+            data[i]     = finalColor; // R
+            data[i + 1] = finalColor; // G
+            data[i + 2] = finalColor; // B
+        }
+        ctx.putImageData(imgData, 0, 0);
+        // -----------------------------------------------------------
+
+        // Exportamos en JPEG con calidad al 95%
+        const fotoProcesada = canvas.toDataURL('image/jpeg', 0.95);
+        listaHojasBase64.push(fotoProcesada);
+
         document.getElementById('images_package').value = JSON.stringify(listaHojasBase64);
 
-        // Renderizar la miniatura en la pantalla para control del usuario
+        // Crear la vista previa en la grilla de abajo
         const thumbContainer = document.createElement('div');
         thumbContainer.className = 'thumb-container';
-        
         const imgElement = document.createElement('img');
-        imgElement.src = fotoRecortadaBase64;
-        
+        imgElement.src = fotoProcesada;
         const labelElement = document.createElement('div');
         labelElement.className = 'thumb-label';
-        labelElement.innerText = "Pág. " + listaHojasBase64.length;
+        labelElement.innerText = "Pág. " + listaHojasBase64.length + " ✔";
 
         thumbContainer.appendChild(imgElement);
         thumbContainer.appendChild(labelElement);
         previewZone.appendChild(thumbContainer);
 
-        // Mostrar el botón de guardar PDF si ya hay hojas listas
         if (listaHojasBase64.length > 0) {
             btnGuardar.style.display = "block";
         }
