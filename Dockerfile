@@ -1,12 +1,21 @@
 FROM php:8.2-apache
 
-# Copiar todo el contenido de tu GitHub al servidor
+# Habilitar el módulo de reescritura de Apache
+RUN a2enmod rewrite
+
+# NUEVO: Instalar y habilitar la extensión mysqli para conectarse a bases de datos
+RUN docker-php-ext-install mysqli && docker-php-ext-enable mysqli
+
+# Configurar Apache para que acepte index.php como archivo principal y permita leer la raíz
+RUN sed -i 's/DirectoryIndex index.html index.cgi index.pl index.php index.xhtml index.htm/DirectoryIndex index.php index.html/g' /etc/apache2/mods-enabled/dir.conf
+
+# Copiar los archivos del repositorio al directorio del servidor web
 COPY . /var/www/html/
 
-# Forzar la creación de uploads por si acaso
+# Forzar la creación de la carpeta uploads
 RUN mkdir -p /var/www/html/uploads
 
-# --- ESTO VA A MOSTRAR EN LOS LOGS QUÉ ARCHIVOS HAY REALMENTE ---
-RUN echo "=== ARCHIVOS EN LA RAÍZ ===" && ls -la /var/www/html/
+# Asegurar los permisos correctos en todo el directorio
+RUN chmod -R 777 /var/www/html/uploads
 
 EXPOSE 80
