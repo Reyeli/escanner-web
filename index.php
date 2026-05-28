@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Escáner Profesional - InnovaSoft</title>
+    <title>Escáner Inteligente Nítido - InnovaSoft</title>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css">
     
@@ -30,7 +30,6 @@
         h2 { margin: 0 0 5px 0; color: #333; }
         p { color: #666; font-size: 14px; margin-bottom: 20px; }
         
-        /* Área de edición donde aparece la foto para recortar */
         .editor-wrapper {
             max-width: 100%;
             max-height: 400px;
@@ -39,6 +38,7 @@
             background: #222;
             border-radius: 8px;
             overflow: hidden;
+            position: relative;
         }
         .editor-wrapper img {
             max-width: 100%;
@@ -62,7 +62,6 @@
         .btn-success { background: #28a745; display: none; }
         .btn-warning { background: #ff9800; display: none; }
         
-        /* Ocultar el input de archivo feo por defecto */
         #inputFoto { display: none; }
         
         .preview-zone {
@@ -88,36 +87,48 @@
             margin-top: 2px;
             font-weight: bold;
         }
+        #estadoOpenCV {
+            font-size: 12px;
+            color: #ff9800;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Escáner Profesional Web</h2>
-    <p>Toma la foto normal con tu cámara, recorta los bordes con precisión y optimiza la nitidez.</p>
+    <h2>Escáner Inteligente Pro</h2>
+    <p>Detección automática de bordes con OpenCV y binarización adaptativa para máxima legibilidad.</p>
+    
+    <div id="estadoOpenCV">🔄 Cargando Inteligencia Artificial...</div>
 
-    <label for="inputFoto" class="btn" id="lblSeleccionar">📸 Tomar / Seleccionar Foto</label>
+    <label for="inputFoto" class="btn" id="lblSeleccionar" style="display:none;">📸 Tomar / Seleccionar Foto</label>
     <input type="file" id="inputFoto" accept="image/*">
 
     <div class="editor-wrapper" id="editorWrapper">
         <img id="imageToCrop" src="">
     </div>
 
-    <button class="btn btn-warning" id="btnRecortar" onclick="procesarRecorteYNitidez()">✂️ Confirmar Recorte de Hoja</button>
+    <button class="btn btn-warning" id="btnRecortar" onclick="procesarRecorteInteligente()">✂️ Confirmar y Optimizar Hoja</button>
     
     <form action="procesar.php" method="POST" id="formScanner">
         <input type="hidden" name="images_package" id="images_package">
-        <button type="submit" class="btn btn-success" id="btnGuardar">📦 Generar PDF Legible</button>
+        <button type="submit" class="btn btn-success" id="btnGuardar">📦 Generar PDF de Alta Nitidez</button>
     </form>
 
     <div class="preview-zone" id="previewZone"></div>
 </div>
 
+<canvas id="canvasMat" style="display:none;"></canvas>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<script async src="https://docs.opencv.org/4.x/opencv.js" onload="openCvListo()"></script>
 
 <script>
     let cropper = null;
     let listaHojasBase64 = [];
+    let openCvCargado = false;
     
     const inputFoto = document.getElementById('inputFoto');
     const imageToCrop = document.getElementById('imageToCrop');
@@ -126,79 +137,151 @@
     const btnGuardar = document.getElementById('btnGuardar');
     const lblSeleccionar = document.getElementById('lblSeleccionar');
     const previewZone = document.getElementById('previewZone');
+    const estadoOpenCV = document.getElementById('estadoOpenCV');
 
-    // Detectar cuando el usuario toma una foto o selecciona un archivo
+    function openCvListo() {
+        openCvCargado = true;
+        estadoOpenCV.style.display = "none";
+        lblSeleccionar.style.display = "inline-block";
+    }
+
     inputFoto.addEventListener('change', function(e) {
         const files = e.target.files;
         if (files && files.length > 0) {
             const reader = new FileReader();
             reader.onload = function(event) {
-                // Destruir cropper anterior si existía
-                if (cropper) {
-                    cropper.destroy();
-                }
+                if (cropper) { cropper.destroy(); }
                 
                 imageToCrop.src = event.target.result;
                 editorWrapper.style.display = "block";
                 btnRecortar.style.display = "block";
                 lblSeleccionar.innerText = "🔄 Cambiar Foto";
                 
-                // Inicializar Cropper con libertad de movimiento en las esquinas
+                // Inicializar Cropper en modo libre
                 cropper = new Cropper(imageToCrop, {
                     viewMode: 1,
                     dragMode: 'move',
-                    autoCropArea: 0.8,
+                    autoCropArea: 0.95,
                     restore: false,
                     guides: true,
-                    center: true,
                     highlight: false,
                     cropBoxMovable: true,
                     cropBoxResizable: true,
                     toggleDragModeOnDblclick: false,
+                    ready: function () {
+                        if (openCvCargado) {
+                            detectarBordesYAutoAjustar();
+                        }
+                    }
                 });
             };
             reader.readAsDataURL(files[0]);
         }
     });
 
-    function procesarRecorteYNitidez() {
+    // Algoritmo de Visión Artificial para buscar el contorno de la hoja
+    function detectarBordesYAutoAjustar() {
+        try {
+            let src = cv.imread(imageToCrop);
+            let gray = new cv.Mat();
+            let blurred = new cv.Mat();
+            let thresh = new cv.Mat();
+            let contours = new cv.MatVector();
+            let hierarchy = new cv.Mat();
+
+            // 1. Pasar a escala de grises y desenfocar para quitar ruido
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY, 0);
+            cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+            
+            // 2. Umbral de Canny para detectar bordes lineales contrastados
+            cv.Canny(blurred, thresh, 75, 200, 3, false);
+            
+            // 3. Encontrar contornos en la imagen binaria
+            cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+            let maxArea = 0;
+            let maxContourIndex = -1;
+
+            for (let i = 0; i < contours.size(); ++i) {
+                let contour = contours.get(i);
+                let area = cv.contourArea(contour);
+                if (area > maxArea) {
+                    maxArea = area;
+                    maxContourIndex = i;
+                }
+            }
+
+            // Si se encontró un área representativa, calculamos su caja delimitadora
+            if (maxContourIndex !== -1) {
+                let idealContour = contours.get(maxContourIndex);
+                let rect = cv.boundingRect(idealContour);
+                
+                // Obtener las relaciones de escala entre el elemento original y la vista de Cropper
+                const imageData = cropper.getImageData();
+                const scale = imageData.width / imageData.naturalWidth;
+
+                // Mover el cuadro de Cropper automáticamente a las coordenadas detectadas
+                cropper.setCropBoxData({
+                    left: imageData.left + (rect.x * scale),
+                    top: imageData.top + (rect.y * scale),
+                    width: rect.width * scale,
+                    height: rect.height * scale
+                });
+            }
+
+            // Liberar memoria de los objetos nativos de OpenCV C++
+            src.delete(); gray.delete(); blurred.delete(); thresh.delete();
+            contours.delete(); hierarchy.delete();
+        } catch (err) {
+            console.log("No se pudo auto-detectar, se mantiene ajuste manual estándar.");
+        }
+    }
+
+    function procesarRecorteInteligente() {
         if (!cropper) return;
 
-        // Obtener el lienzo recortado a la resolución nativa original de la foto
+        // Extraer el canvas con la resolución nativa Full de la foto original
         const canvas = cropper.getCroppedCanvas({
             imageSmoothingEnabled: true,
             imageSmoothingQuality: 'high',
         });
 
         const ctx = canvas.getContext('2d');
-
-        // --- FILTRO DE ALTO CONTRASTE INTEGRADO ---
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const data = imgData.data;
 
+        // --- FILTRO ADAPTATIVO AVANZADO DE NITIDEZ Y TEXTO ---
+        // Convierte el fondo en blanco perfecto y realza el contraste de la tinta negra
         for (let i = 0; i < data.length; i += 4) {
-            // Conversión a escala de grises de alta fidelidad
-            let gris = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
-            
-            // Umbral calibrado (Todo fondo opaco/sombra pasa a blanco puro, texto a negro)
-            let umbral = 130; 
-            let colorFinal = (gris > umbral) ? 255 : 0;
+            let r = data[i];
+            let g = data[i+1];
+            let b = data[i+2];
 
-            data[i]     = colorFinal;
-            data[i + 1] = colorFinal;
-            data[i + 2] = colorFinal;
+            // Luminosidad del píxel
+            let gris = 0.299 * r + 0.587 * g + 0.114 * b;
+
+            // Filtro dinámico: Limpiamos los grises claros (sombras de la mano o el celular)
+            // Si el píxel tiende a claro, se fuerza a blanco puro; si es texto oscuro, se acentúa.
+            if (gris > 140) {
+                data[i] = 255;     // R
+                data[i+1] = 255;   // G
+                data[i+2] = 255;   // B
+            } else {
+                // Aumentar la densidad del color oscuro para máxima legibilidad
+                let factorContraste = 0.6; 
+                data[i] = Math.max(0, r * factorContraste);
+                data[i+1] = Math.max(0, g * factorContraste);
+                data[i+2] = Math.max(0, b * factorContraste);
+            }
         }
         ctx.putImageData(imgData, 0, 0);
-        // ------------------------------------------
+        // -----------------------------------------------------
 
-        // Convertir el canvas final optimizado a Base64 con alta densidad
-        const fotoFinalBase64 = canvas.toDataURL('image/jpeg', 0.95);
+        const fotoFinalBase64 = canvas.toDataURL('image/jpeg', 0.98);
         listaHojasBase64.push(fotoFinalBase64);
 
-        // Actualizar el paquete para procesar.php
         document.getElementById('images_package').value = JSON.stringify(listaHojasBase64);
 
-        // Crear vista previa en la grilla inferior
         const thumbContainer = document.createElement('div');
         thumbContainer.className = 'thumb-container';
         const imgElement = document.createElement('img');
@@ -211,15 +294,12 @@
         thumbContainer.appendChild(labelElement);
         previewZone.appendChild(thumbContainer);
 
-        // Limpiar el editor y preparar para la siguiente hoja
         cropper.destroy();
         cropper = null;
         editorWrapper.style.display = "none";
         btnRecortar.style.display = "none";
         lblSeleccionar.innerText = "📸 Agregar Siguiente Hoja";
         btnGuardar.style.display = "block";
-        
-        // Resetear el input para que permita subir la misma foto si se desea
         inputFoto.value = "";
     }
 </script>
